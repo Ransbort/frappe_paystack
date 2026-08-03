@@ -1,7 +1,7 @@
 [project]
 name = "frappe_paystack"
 authors = [
-    { name = "Anthony Emmanuel", email = "mymi14s@hotmail.com"}
+    { name = "Ransford Borketey", email = "ransbort@outlook.com"}
 ]
 description = "Paystack integration for Frappe/ERPNext"
 requires-python = ">=3.12"
