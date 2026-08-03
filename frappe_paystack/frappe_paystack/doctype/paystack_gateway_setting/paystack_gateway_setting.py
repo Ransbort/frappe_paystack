@@ -45,4 +45,4 @@ class PaystackGatewaySetting(Document):
 		return self.supported_currencies
 	
 	def get_payment_url(self, **kwargs):
-		return get_url(f"./paystack_checkout?{urlencode(kwargs)}")
+		return get_url(f"./paystack-checkout?{urlencode(kwargs)}")
