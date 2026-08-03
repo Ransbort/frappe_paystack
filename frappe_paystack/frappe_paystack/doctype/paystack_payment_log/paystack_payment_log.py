@@ -59,7 +59,9 @@ class PaystackPaymentLog(Document):
         attempt to clear the invoice by creating a Payment Entry (partial or full).
         We keep this conservative: if currencies mismatch or amount is zero, skip.
         """
-        
+        if self.status in ("Processed", "Completed"):
+            self._mark_related_payment_requests_paid()
+
         if not (self.linked_doctype == self.linked_doctype and self.linked_docname):
             return
 
@@ -121,6 +123,41 @@ class PaystackPaymentLog(Document):
             frappe.set_user("Guest")
         except Exception as e:
             frappe.log_error("Failed to create Payment Entry from Paystack log", f"""{self.name} - {frappe.get_traceback()}""")
+
+    def _mark_related_payment_requests_paid(self):
+        """
+        ERPNext's own Payment Request flow expects to update its own
+        status via its Payment Request document (e.g. set_as_paid()),
+        normally triggered through its own Integration Request/webhook
+        confirmation chain. Since Paystack Payment Log handles
+        confirmation independently (via verify_transaction or our own
+        webhook), that chain never runs — so the Payment Request would
+        otherwise stay stuck on "Requested" even after a successful
+        payment. Sync it here instead.
+        """
+        payment_requests = frappe.get_all(
+            "Payment Request",
+            filters={
+                "reference_doctype": self.linked_doctype,
+                "reference_name": self.linked_docname,
+                "status": ["!=", "Paid"],
+            },
+            pluck="name",
+        )
+        for pr_name in payment_requests:
+            try:
+                frappe.db.set_value(
+                    "Payment Request",
+                    pr_name,
+                    {"status": "Paid", "outstanding_amount": 0},
+                )
+            except Exception:
+                frappe.log_error(
+                    f"Failed to mark {pr_name} as Paid from Paystack Payment Log {self.name}",
+                    "Paystack payment",
+                )
+        if payment_requests:
+            frappe.db.commit()
 
     def get_payment_link(self):
         # NOTE: index.py's get_context() reads the reference via
