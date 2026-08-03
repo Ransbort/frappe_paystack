@@ -8,7 +8,7 @@
 <tbody>
 {% for inv in invoices %}
 <tr>
-  <td><a href="/desk/sales-invoice/{{ inv.name }}">{{ inv.name }}</a></td>
+  <td><a href="{{ inv.form_url }}">{{ inv.name }}</a></td>
   <td>{{ inv.posting_date }}</td>
   <td>{{ inv.due_date }}</td>
   <td>{{ frappe.utils.fmt_money(inv.outstanding_amount, currency=inv.currency) }}</td>
@@ -25,7 +25,7 @@
 {% for log in payments %}
 <tr>
   <td>{{ log.reference }}</td>
-  <td><a href="/desk/sales-invoice/{{ log.linked_docname }}">{{ log.linked_docname }}</a></td>
+  <td><a href="{{ log.form_url }}">{{ log.linked_docname }}</a></td>
   <td>{{ frappe.utils.fmt_money(log.amount, currency=log.currency) }}</td>
   <td>{{ log.currency }}</td>
   <td>{{ log.status }}</td>
