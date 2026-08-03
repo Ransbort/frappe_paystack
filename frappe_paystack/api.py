@@ -1,5 +1,4 @@
-
-import frappe, hmac, hashlib, json
+import frappe, hmac, hashlib, json, requests
 from frappe_paystack.utils import (
     resolve_paystack_settings, is_paystack_enabled, coalesce_currency, resolve_paystack_settings
 )
@@ -97,6 +96,48 @@ def create_payment_link(doctype, docname, amount: float=None, currency: str=None
 
     reference = log_pending_payment(doc, amount, currency)
     return reference.get_payment_link()
+
+@frappe.whitelist(allow_guest=True)
+def verify_transaction(reference, trxref=None):
+    """
+    Called from the checkout page's Paystack popup `callback` immediately
+    after a charge completes client-side. Verifies the transaction
+    directly against Paystack's API and updates the Paystack Payment Log
+    synchronously — the webhook alone isn't reliable here, since Paystack
+    can't deliver a webhook to a local/dev host (e.g. localhost) without a
+    public tunnel, which would otherwise leave the log stuck at "Pending"
+    even after a successful payment.
+    """
+    if not frappe.db.exists(LOG_DOCTYPE, reference):
+        frappe.throw("Invalid payment reference")
+
+    log = frappe.get_doc(LOG_DOCTYPE, reference)
+    settings = resolve_paystack_settings(log.company)
+    if not settings:
+        frappe.throw("Paystack not configured for this company")
+
+    trx_ref = trxref or reference
+    response = requests.get(
+        f"https://api.paystack.co/transaction/verify/{trx_ref}",
+        headers={"Authorization": f"Bearer {settings['secret_key']}"},
+        timeout=15,
+    )
+    response.raise_for_status()
+    tx = frappe._dict((response.json() or {}).get("data") or {})
+
+    log.status = "Processed" if tx.get("status") == "success" else "Failed"
+    log.amount_paid = (tx.get("amount") or 0) / 100
+    log.currency_paid = (tx.get("currency") or log.currency or "NGN").upper()
+    log.payment_reference = tx.get("reference")
+    log.transaction_id = tx.get("reference")
+    if tx.get("paid_at"):
+        log.payment_date = tx.get("paid_at").split("T")[0]
+    log.raw_response = json.dumps(tx)
+    log.save(ignore_permissions=True)
+    frappe.db.commit()
+
+    return {"status": log.status}
+
 
 @frappe.whitelist(allow_guest=True)
 def validate_payment_link(docname):
