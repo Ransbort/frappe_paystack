@@ -1,7 +1,5 @@
 const isEmail = str => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(str);
-
 const { createApp } = Vue
-
 createApp({
   delimiters: ['[%', '%]'],
   data() {
@@ -35,14 +33,44 @@ createApp({
             },
             callback: function(response){
                 $('#paymentBTN').hide();
-                Swal.fire(
-                    'Successful',
-                    'Your payment was successful, we will issue you receipt shortly.',
-                    'success'
-                )
+                // Verify synchronously rather than relying solely on the
+                // webhook, which can't reach a local/dev host without a
+                // public tunnel — and redirect afterward so the page
+                // re-renders with the real status instead of dead-ending
+                // on this alert.
+                frappe.call("frappe_paystack.api.verify_transaction", {
+                    reference: doc.reference,
+                    trxref: response.reference
+                }).then(res => {
+                    let status = res.message && res.message.status;
+                    if (status === "Processed") {
+                        Swal.fire(
+                            'Successful',
+                            'Your payment was successful, we will issue you receipt shortly.',
+                            'success'
+                        ).then(() => {
+                            window.location.reload();
+                        });
+                    } else {
+                        Swal.fire(
+                            'Payment Failed',
+                            'We could not confirm your payment. Please contact support if you were charged.',
+                            'error'
+                        ).then(() => {
+                            window.location.reload();
+                        });
+                    }
+                }).catch(() => {
+                    Swal.fire(
+                        'Verification Error',
+                        'Your payment may have succeeded but we could not confirm it automatically. Please contact support with your reference.',
+                        'warning'
+                    ).then(() => {
+                        window.location.reload();
+                    });
+                });
             }
         });
-
         handler.openIframe();
     },
     getData(){
@@ -64,7 +92,6 @@ createApp({
                 if (doc.email){
                     this.payWithPaystack();
                 } else {
-
                     Swal.fire({
                         title: "Your email",
                         input: "text",
@@ -103,10 +130,6 @@ createApp({
     }
   },
   mounted(){
-
   }
 }).mount('#app')
-
-
-
 document.querySelector("paymentBTN")
