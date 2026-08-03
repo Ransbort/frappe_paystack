@@ -4,7 +4,19 @@ PAYMENT_LOG = "Paystack Payment Log"
 
 def get_context(context):
     context.title = "Paystack Checkout"
-    reference = frappe.form_dict.reference
+    reference = frappe.form_dict.get("reference")
+
+    # Fallback: some links may still be generated as
+    # /paystack-checkout/<name> (path segment) rather than
+    # /paystack-checkout?reference=<name> (query param). If no query
+    # param was supplied, check for a trailing path segment so those
+    # links don't dead-end on "Invalid Payment Reference".
+    if not reference:
+        path = frappe.local.request.path or ""
+        parts = [p for p in path.split("/") if p]
+        if parts and parts[-1] != "paystack-checkout":
+            reference = parts[-1]
+
     if not reference:
         context.reference = None
     else:
@@ -44,4 +56,3 @@ def get_payment_request(reference_doctype, reference_docname):
         return {'error':"Payment method is unavailable at the moment, please contact us directly.."}
     payment_request.public_key = public_key
     return payment_request
-
