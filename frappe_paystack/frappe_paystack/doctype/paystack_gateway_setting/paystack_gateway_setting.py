@@ -31,7 +31,7 @@ class PaystackGatewaySetting(Document):
 			if enabled_gateway:
 				frappe.throw(f"""
 					Another gateway is enabled, disable it before enabling this one.<br>
-					<a class="text-danger" href="/app/{self.doctype.lower().replace(' ', '-')}/{enabled_gateway[0].name}">{enabled_gateway[0].name}</a>
+					<a class="text-danger" href="{get_url_to_form(self.doctype, enabled_gateway[0].name)}">{enabled_gateway[0].name}</a>
 				""")
 	def validate_transaction_currency(self, currency):
 		if currency not in self.supported_currencies:
