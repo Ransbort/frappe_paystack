@@ -5,7 +5,7 @@ from urllib.parse import urlencode
 
 import frappe
 from frappe import _
-from frappe.utils import call_hook_method, get_url
+from frappe.utils import call_hook_method, get_url, get_url_to_form
 from frappe.model.document import Document
 
 class PaystackGatewaySetting(Document):
@@ -46,5 +46,3 @@ class PaystackGatewaySetting(Document):
 	
 	def get_payment_url(self, **kwargs):
 		return get_url(f"./paystack_checkout?{urlencode(kwargs)}")
-
-
