@@ -123,7 +123,14 @@ class PaystackPaymentLog(Document):
             frappe.log_error("Failed to create Payment Entry from Paystack log", f"""{self.name} - {frappe.get_traceback()}""")
 
     def get_payment_link(self):
-        return f"{frappe.utils.get_url()}/paystack-checkout/{self.name}"
+        # NOTE: index.py's get_context() reads the reference via
+        # frappe.form_dict.reference, which only picks up query-string
+        # params — not path segments. Previously this returned
+        # ".../paystack-checkout/{self.name}", so form_dict.reference
+        # was always None and every checkout page showed
+        # "Invalid Payment Reference / None". Must be a query param.
+        from urllib.parse import urlencode
+        return f"{frappe.utils.get_url()}/paystack-checkout?{urlencode({'reference': self.name})}"
     
     def get_payment_public_key(self):
         if frappe.db.exists(GATEWAY_DOCTYPE, {"enabled": 1, "company":self.company}):
