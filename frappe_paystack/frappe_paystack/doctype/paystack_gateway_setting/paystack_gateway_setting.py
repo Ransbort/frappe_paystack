@@ -1,4 +1,4 @@
-# Copyright (c) 2024, Anthony C. Emmanuel and contributors
+# Copyright (c) 2024, Ransford Borketey and contributors
 # For license information, please see license.txt
 
 from urllib.parse import urlencode
