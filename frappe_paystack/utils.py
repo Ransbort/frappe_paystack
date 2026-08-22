@@ -2,10 +2,68 @@ from __future__ import annotations
 import base64, io, frappe, json, hmac, hashlib, requests
 from frappe import _
 from typing import Any, Dict, Optional, Tuple
+from urllib.parse import quote
 from frappe.utils import flt, now_datetime
 from frappe.model.document import Document
 
 SUPPORTED_CURRENCIES = ["NGN", "USD", "GHS", "ZAR", "KES"]
+
+
+def require_portal_login(redirect_to: Optional[str] = None) -> bool:
+    """Gate a website page (my-payments, my-payment/<reference>, ...) on
+    being logged in. A guest is sent to /login and bounced back to
+    `redirect_to` (or wherever they were, by default) once they
+    authenticate - unlike frappe.throw(), which just renders an error
+    page in place and leaves them with nowhere to go.
+
+    Matches the pattern healthcare/www/patient-portal/index.py already
+    uses successfully in this codebase: set flags.redirect_location and
+    response["type"] = "redirect" (NOT raise frappe.Redirect, which isn't
+    what that page does). Returns True when it just set up a redirect -
+    the caller MUST check that and return its context immediately, since
+    this doesn't stop execution on its own:
+
+        def get_context(context):
+            if require_portal_login():
+                return context
+            ...
+    """
+    if frappe.session.user and frappe.session.user != "Guest":
+        return False
+    target = redirect_to or (frappe.local.request.path if frappe.local.request else "/")
+    frappe.local.flags.redirect_location = f"/login?redirect-to={quote(target, safe='')}"
+    frappe.local.response["type"] = "redirect"
+    return True
+
+def resolve_customer_by_email(email: Optional[str]) -> Optional[str]:
+    """Resolve the Customer linked to the Contact whose primary email
+    matches `email` (typically frappe.session.user).
+
+    Contact has no plain "customer" column - a Customer is linked to a
+    Contact through the standard Dynamic Link child table (rows with
+    parenttype="Contact", link_doctype="Customer"), not a fetched field.
+    Every page here used to do
+    frappe.db.get_value("Contact", {"email_id": email}, "customer")
+    directly, which would raise an "Unknown column 'customer'" SQL error
+    the first time it ran against a real Contact record - "customer"
+    isn't a queryable column on core Contact. This is what my-payments,
+    my-payment, and (via a since-corrected local copy) sports_complex's
+    own facility booking self-service API were all actually calling.
+    Contact.email_id IS a real, valid field (Frappe keeps it synced from
+    the primary row of the email_ids child table for exactly this kind
+    of lookup) - only the "customer" half of the old call was wrong.
+    """
+    if not email:
+        return None
+    contact_names = frappe.get_all("Contact", filters={"email_id": email}, pluck="name")
+    if not contact_names:
+        return None
+    return frappe.db.get_value(
+        "Dynamic Link",
+        {"parenttype": "Contact", "parent": ["in", contact_names], "link_doctype": "Customer"},
+        "link_name",
+    )
+
 
 MINOR_FACTORS = {
     "NGN": 100,

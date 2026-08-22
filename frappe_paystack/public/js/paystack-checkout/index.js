@@ -1,135 +1,158 @@
 const isEmail = str => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(str);
-const { createApp } = Vue
+const { createApp } = Vue;
+
 createApp({
-  delimiters: ['[%', '%]'],
+  delimiters: ['[[', ']]'],
   data() {
     return {
-        id: '',
-        payment_data: {},
-        gateway: '',
-        showDiv: false,
-        doc: window.doc,
-    }
+      reference: window.reference,
+      doc: window.doc,
+      paying: false,
+    };
+  },
+  computed: {
+    // Same precedence as the old Jinja if/elif chain this page used to
+    // render server-side (see git history on index.html): gateway check
+    // first, then "payment not settled but the order already is"
+    // (invalid/expired), then "either side is settled" (completed), then
+    // Failed, else the normal pay screen.
+    pageState() {
+      if (!this.reference || !this.doc) return 'no-reference';
+      const d = this.doc;
+      if (!d.public_key) return 'gateway-inactive';
+      const orderSettled = ['Completed', "Closed'", 'Paid'].includes(d.order_status);
+      const paymentSettled = ['Completed', 'Processed'].includes(d.status);
+      if (!paymentSettled && orderSettled) return 'invalid-expired';
+      if (paymentSettled || orderSettled) return 'completed';
+      if (d.status === 'Failed') return 'failed';
+      return 'summary';
+    },
   },
   methods: {
-    payWithPaystack(){
-        let me = this;
-        let handler = PaystackPop.setup({
-            key: doc.public_key, 
-            amount: doc.payment_amount * 100,
-            // ref: me.payment_data.name+'_'+Math.floor((Math.random() * 1000000000) + 1), // generates a pseudo-unique reference. Please replace with a reference you generated. Or remove the line entirely so our API will generate one for you
-            currency: doc.currency,
-            email: doc.email,
-            metadata: {
-                reference_doctype:doc.reference_doctype,
-                reference_docname:doc.reference_docname,
-                customer:doc.customer,
-                reference:doc.reference,
-                email: doc.email
-            },
-            // label: "Optional string that replaces customer email"
-            onClose: function(){
-                alert('Payment Terminated.');
-            },
-            callback: function(response){
-                $('#paymentBTN').hide();
-                // Verify synchronously rather than relying solely on the
-                // webhook, which can't reach a local/dev host without a
-                // public tunnel — and redirect afterward so the page
-                // re-renders with the real status instead of dead-ending
-                // on this alert.
-                frappe.call("frappe_paystack.api.verify_transaction", {
-                    reference: doc.reference,
-                    trxref: response.reference
-                }).then(res => {
-                    let status = res.message && res.message.status;
-                    if (status === "Processed") {
-                        Swal.fire(
-                            'Successful',
-                            'Your payment was successful, we will issue you receipt shortly.',
-                            'success'
-                        ).then(() => {
-                            window.location.reload();
-                        });
-                    } else {
-                        Swal.fire(
-                            'Payment Failed',
-                            'We could not confirm your payment. Please contact support if you were charged.',
-                            'error'
-                        ).then(() => {
-                            window.location.reload();
-                        });
-                    }
-                }).catch(() => {
-                    Swal.fire(
-                        'Verification Error',
-                        'Your payment may have succeeded but we could not confirm it automatically. Please contact support with your reference.',
-                        'warning'
-                    ).then(() => {
-                        window.location.reload();
-                    });
-                });
-            }
-        });
-        handler.openIframe();
+    formatCurrency(amount, currency) {
+      if (currency) {
+        return Intl.NumberFormat('en-US', { currency, style: 'currency' }).format(amount);
+      }
+      return Intl.NumberFormat('en-US').format(amount);
     },
-    getData(){
-        let me = this;
-        frappe.call("frappe_paystack.api.validate_payment_link", {"docname": doc.reference}).then(res=>{
-            let data = res.message;
-            if (data.order_status in ["Completed", "Closed'", "Paid"]) {
-                errors = "Paid or Completed"
-            } else if (["Processed", "Completed"].includes(data.status)){
-                errors = "Payment already processed."
-            } else if ([0, 2].includes(data.order_docstatus)) {
-                errors = "Payment link expired or invalid."
-            } else {
-                errors = ""
-            }
-            if (errors){
+    payWithPaystack() {
+      const me = this;
+      const handler = PaystackPop.setup({
+        key: this.doc.public_key,
+        amount: this.doc.payment_amount * 100,
+        // ref: a pseudo-unique reference. Leave unset so our API generates one for you.
+        currency: this.doc.currency,
+        email: this.doc.email,
+        metadata: {
+          reference_doctype: this.doc.reference_doctype,
+          reference_docname: this.doc.reference_docname,
+          customer: this.doc.customer,
+          reference: this.doc.reference,
+          email: this.doc.email,
+        },
+        // label: "Optional string that replaces customer email"
+        onClose: function () {
+          me.paying = false;
+          Swal.fire('Payment Terminated', 'You closed the payment window before completing it.', 'info');
+        },
+        callback: function (response) {
+          // Stays "paying" through verification, not just until the popup
+          // closes - the popup reporting success isn't the same as our
+          // own record being updated yet.
+          // Verify synchronously rather than relying solely on the
+          // webhook, which can't reach a local/dev host without a
+          // public tunnel — and redirect afterward so the page
+          // re-renders with the real status instead of dead-ending
+          // on this alert.
+          frappe.call('frappe_paystack.api.verify_transaction', {
+            reference: me.doc.reference,
+            trxref: response.reference,
+          }).then(res => {
+            const status = res.message && res.message.status;
+            if (status === 'Processed') {
+              Swal.fire(
+                'Successful',
+                'Your payment was successful, we will issue you receipt shortly.',
+                'success'
+              ).then(() => {
                 window.location.reload();
+              });
             } else {
-                if (doc.email){
-                    this.payWithPaystack();
-                } else {
-                    Swal.fire({
-                        title: "Your email",
-                        input: "text",
-                        inputAttributes: {
-                            autocapitalize: "off"
-                        },
-                        showCancelButton: false,
-                        confirmButtonText: "Continue",
-                        showLoaderOnConfirm: true,
-                        allowOutsideClick: () => !Swal.isLoading()
-                    }).then((value) => {
-                        if (value.isConfirmed) {
-                            if (isEmail(value.value)){
-                                doc.email = value.value;
-                                me.payWithPaystack();
-                            } else {
-                                Swal.fire({
-                                    title: "Invalid Email",
-                                    text: "Retry",
-                                    icon: "warning"
-                                });
-                            }
-                        }
-                        
-                    });
-                }
+              Swal.fire(
+                'Payment Failed',
+                'We could not confirm your payment. Please contact support if you were charged.',
+                'error'
+              ).then(() => {
+                window.location.reload();
+              });
             }
-        })
+          }).catch(() => {
+            Swal.fire(
+              'Verification Error',
+              'Your payment may have succeeded but we could not confirm it automatically. Please contact support with your reference.',
+              'warning'
+            ).then(() => {
+              window.location.reload();
+            });
+          });
+        },
+      });
+      handler.openIframe();
     },
-    formatCurrency(amount, currency){
-        if(currency){
-            return Intl.NumberFormat('en-US', {currency:currency, style:'currency'}).format(amount);
-        } else {
-            return Intl.NumberFormat('en-US').format(amount);
+    getData() {
+      const me = this;
+      this.paying = true;
+      frappe.call('frappe_paystack.api.validate_payment_link', { docname: this.doc.reference }).then(res => {
+        const data = res.message || {};
+        // Was `data.order_status in [...]` in the original - JS `in`
+        // tests object/array *keys*, not membership, so that check never
+        // actually matched anything. Fixed to .includes() like the other
+        // two branches already correctly used.
+        let error = '';
+        if (['Completed', "Closed'", 'Paid'].includes(data.order_status)) {
+          error = 'Paid or Completed';
+        } else if (['Processed', 'Completed'].includes(data.status)) {
+          error = 'Payment already processed.';
+        } else if ([0, 2].includes(data.order_docstatus)) {
+          error = 'Payment link expired or invalid.';
         }
-    }
+        if (error) {
+          window.location.reload();
+          return;
+        }
+        if (me.doc.email) {
+          me.payWithPaystack();
+        } else {
+          me.paying = false;
+          Swal.fire({
+            title: 'Your email',
+            input: 'text',
+            inputAttributes: {
+              autocapitalize: 'off',
+            },
+            showCancelButton: false,
+            confirmButtonText: 'Continue',
+            showLoaderOnConfirm: true,
+            allowOutsideClick: () => !Swal.isLoading(),
+          }).then((value) => {
+            if (value.isConfirmed) {
+              if (isEmail(value.value)) {
+                me.doc.email = value.value;
+                me.paying = true;
+                me.payWithPaystack();
+              } else {
+                Swal.fire({
+                  title: 'Invalid Email',
+                  text: 'Retry',
+                  icon: 'warning',
+                });
+              }
+            }
+          });
+        }
+      }).catch(() => {
+        me.paying = false;
+      });
+    },
   },
-  mounted(){
-  }
-}).mount('#app')
-document.querySelector("paymentBTN")
+}).mount('#app');

@@ -15,7 +15,8 @@ doctype_js = {
 
 
 website_route_rules = [
-    {"from_route": "/paystack-checkout/<reference>", "to_route": "paystack-checkout"}
+    {"from_route": "/paystack-checkout/<reference>", "to_route": "paystack-checkout"},
+    {"from_route": "/my-payment/<reference>", "to_route": "my-payment"},
 ]
 
 

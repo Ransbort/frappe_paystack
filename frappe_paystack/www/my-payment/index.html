@@ -1,0 +1,257 @@
+{% extends "templates/web.html" %}
+{% block title %}{{ _("Payment Status") }}{% endblock %}
+
+{% block page_content %}
+<div id="app" class="paystack-status">
+    <!-- Not found, or found but not this user's - same message either way -->
+    <div v-if="pageState === 'not-found'" class="container pc-page" style="max-width: 600px;">
+        <div class="alert alert-danger shadow-sm border-0 rounded-4 d-flex align-items-center p-4" role="alert">
+            <div class="me-3">
+                <i class="bi bi-x-circle-fill" style="font-size: 2rem;"></i>
+            </div>
+            <div>
+                <h5 class="alert-heading mb-1 fw-bold">Payment Not Found</h5>
+                <p class="mb-0">We couldn't find a payment matching that reference on your account.</p>
+                <hr>
+                <a href="/my-payments" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i> Back to My Payments
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Found -->
+    <div v-else class="container pc-page">
+        <div class="pc-card card border-0 rounded-4">
+            <div class="card-body p-0">
+                <div class="pc-card-header">
+                    <div class="pc-card-header-title">
+                        <i class="bi bi-receipt-cutoff"></i>
+                        <span>Payment Status</span>
+                    </div>
+                    <span class="badge pc-status-badge" :class="statusBadgeClass">[[ doc.status ]]</span>
+                </div>
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item pc-row">
+                        <span class="pc-label">Payment Reference</span>
+                        <span class="badge pc-badge">[[ reference ]]</span>
+                    </li>
+                    <li class="list-group-item pc-row">
+                        <span class="pc-label">Invoice / Order No.</span>
+                        <span class="badge pc-badge">
+                            <a v-if="doc.invoice_url" :href="doc.invoice_url" class="pc-badge-link">[[ doc.order_no ]]</a>
+                            <template v-else>[[ doc.order_no ]]</template>
+                        </span>
+                    </li>
+                    <li class="list-group-item pc-row">
+                        <span class="pc-label">Order Amount</span>
+                        <span class="badge pc-badge pc-badge-muted">[[ doc.order_amount_fmt ]]</span>
+                    </li>
+                    <li class="list-group-item pc-row pc-row-total">
+                        <span class="pc-label">Amount Due</span>
+                        <span class="badge pc-badge pc-badge-total">[[ doc.amount_fmt ]]</span>
+                    </li>
+                    <li v-if="doc.amount_paid" class="list-group-item pc-row">
+                        <span class="pc-label">Amount Paid</span>
+                        <span class="badge pc-badge">[[ doc.amount_paid_fmt ]]</span>
+                    </li>
+                    <li v-if="doc.transaction_id" class="list-group-item pc-row">
+                        <span class="pc-label">Transaction ID</span>
+                        <span class="badge pc-badge">[[ doc.transaction_id ]]</span>
+                    </li>
+                    <li v-if="doc.payment_date" class="list-group-item pc-row">
+                        <span class="pc-label">Payment Date</span>
+                        <span class="badge pc-badge">[[ doc.payment_date ]]</span>
+                    </li>
+                </ul>
+                <div class="pc-card-footer">
+                    <a v-if="canRetry" :href="'/paystack-checkout?reference=' + reference" class="btn btn-success pc-pay-btn">
+                        <i class="bi bi-arrow-repeat me-2"></i> Retry Payment
+                    </a>
+                    <a v-else-if="isSettled" :href="receiptUrl" target="_blank" class="btn btn-success pc-pay-btn">
+                        <i class="bi bi-download me-2"></i> Download Receipt
+                    </a>
+                    <a href="/my-payments" class="btn pc-secondary-btn">
+                        <i class="bi bi-arrow-left me-2"></i> Back to My Payments
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .paystack-status .pc-page {
+        min-height: 70vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem 1rem;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    .paystack-status .pc-page > .alert {
+        width: 100%;
+    }
+
+    .paystack-status .pc-card {
+        width: 100%;
+        max-width: 480px;
+        box-shadow: 0 4px 24px rgba(15, 23, 42, 0.08);
+        border: 1px solid rgba(15, 23, 42, 0.06);
+    }
+
+    .paystack-status .pc-card-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        padding: 1.25rem 1.5rem;
+        border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+        color: #1f2937;
+    }
+
+    .paystack-status .pc-card-header-title {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-weight: 600;
+        font-size: 1.05rem;
+    }
+
+    .paystack-status .pc-card-header-title i {
+        font-size: 1.15rem;
+        color: #16a34a;
+    }
+
+    .paystack-status .pc-status-badge {
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        padding: 0.35rem 0.65rem;
+        border-radius: 999px;
+    }
+
+    .paystack-status .pc-status-success {
+        background-color: #dcfce7;
+        color: #15803d;
+    }
+
+    .paystack-status .pc-status-pending {
+        background-color: #fef3c7;
+        color: #b45309;
+    }
+
+    .paystack-status .pc-status-failed {
+        background-color: #fee2e2;
+        color: #b91c1c;
+    }
+
+    .paystack-status .pc-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem 1rem;
+        padding: 0.9rem 1.5rem;
+        border-color: rgba(15, 23, 42, 0.06);
+    }
+
+    .paystack-status .pc-row-total {
+        background-color: rgba(22, 163, 74, 0.05);
+    }
+
+    .paystack-status .pc-label {
+        color: #6b7280;
+        font-weight: 500;
+        font-size: 0.9rem;
+    }
+
+    .paystack-status .pc-row-total .pc-label {
+        color: #1f2937;
+        font-weight: 600;
+    }
+
+    .paystack-status .pc-badge {
+        background-color: #f3f4f6;
+        color: #1f2937;
+        font-weight: 600;
+        font-size: 0.85rem;
+        padding: 0.4rem 0.75rem;
+        border-radius: 999px;
+        word-break: break-word;
+        text-align: right;
+    }
+
+    .paystack-status .pc-badge-link {
+        color: inherit;
+        text-decoration: underline;
+    }
+
+    .paystack-status .pc-badge-muted {
+        background-color: #f3f4f6;
+        color: #4b5563;
+    }
+
+    .paystack-status .pc-badge-total {
+        background-color: #16a34a;
+        color: #ffffff;
+        font-size: 0.95rem;
+    }
+
+    .paystack-status .pc-card-footer {
+        padding: 1.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .paystack-status .pc-pay-btn {
+        width: 100%;
+        padding: 0.75rem 1rem;
+        font-weight: 600;
+        font-size: 1rem;
+        border-radius: 0.65rem;
+        background-color: #16a34a;
+        border-color: #16a34a;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .paystack-status .pc-pay-btn:hover {
+        background-color: #15803d;
+        border-color: #15803d;
+    }
+
+    .paystack-status .pc-secondary-btn {
+        width: 100%;
+        padding: 0.65rem 1rem;
+        font-weight: 600;
+        border-radius: 0.65rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #4b5563;
+        border: 1px solid #d1d5db;
+        background-color: transparent;
+    }
+
+    .paystack-status .pc-secondary-btn:hover {
+        background-color: #f9fafb;
+        color: #1f2937;
+    }
+</style>
+{% endblock %}
+
+{% block script %}
+<script src="/assets/frappe_paystack/js/vue.global.js"></script>
+<script>
+  window.doc = {{ doc_json | safe }};
+  window.reference = {{ reference_json | safe }};
+</script>
+<script src="/assets/frappe_paystack/js/my-payment/index.js"></script>
+{% endblock %}

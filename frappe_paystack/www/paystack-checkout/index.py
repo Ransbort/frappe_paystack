@@ -19,6 +19,7 @@ def get_context(context):
 
     if not reference:
         context.reference = None
+        context.doc = None
     else:
         if frappe.db.exists(PAYMENT_LOG, {"name": reference}):
             doc = frappe.get_doc(PAYMENT_LOG, reference)
@@ -26,6 +27,20 @@ def get_context(context):
             context.reference = reference
         else:
             context.reference = None
+            context.doc = None
+
+    # index.html used to embed this page's state with `{{ doc | safe }}`
+    # straight into a <script> tag. That relied on Python's dict repr
+    # happening to look enough like a JS object literal to parse (single
+    # quotes are valid JS, but None/True/False aren't - str(None) is the
+    # bareword `None`, which is a JS SyntaxError) - and it broke outright
+    # whenever doc was unset, since `context.doc` was never assigned in
+    # that branch and an undefined Jinja var renders as '', producing
+    # `window.doc = ;`. Precomputing real JSON here (rendered with
+    # frappe.as_json(...) | safe in the template) is what the Vue rewrite
+    # actually consumes as its initial state.
+    context.doc_json = frappe.as_json(context.doc) if context.doc else "null"
+    context.reference_json = frappe.as_json(context.reference) if context.reference else "null"
 
     return context
 

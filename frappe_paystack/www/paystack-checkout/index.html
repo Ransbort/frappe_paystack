@@ -3,139 +3,273 @@
 
 
 {% block page_content %}
-<div id="app">
-    {% if reference and doc %}
-        {% if not doc.public_key %}
-            <div class="container mt-5" style="max-width: 600px;">
-                <div class="alert alert-warning shadow-lg border-0 rounded-3 d-flex align-items-center p-4" role="alert">
-                    <div class="me-3">
-                        <i class="bi bi-check-circle-fill" style="font-size: 2rem;"></i>
-                    </div>
-                    <div>
-                        <h5 class="alert-heading mb-1 fw-bold">Payment Gatway is not Active.</h5>
-                        <p class="mb-0">Please contact the vendor.!</p>
-                        <hr>
-                        <p class="mb-0">
-                            <strong>Reference:</strong>
-                            <span class="badge bg-dark fs-6 ms-2">{{reference}}</span>
-                        </p>
-                    </div>
-                    
-                </div>
-            </div>
-        {% elif not doc.status in ["Completed", "Processed"]  and doc.order_status in ["Completed", "Closed'", "Paid"] %}
-            <div class="container mt-5" style="max-width: 600px;">
-                <div class="alert alert-warning shadow-lg border-0 rounded-3 d-flex align-items-center p-4" role="alert">
-                    <div class="me-3">
-                        <i class="bi bi-check-circle-fill" style="font-size: 2rem;"></i>
-                    </div>
-                    <div>
-                        <h5 class="alert-heading mb-1 fw-bold">Payment Invalid</h5>
-                        <p class="mb-0">This payment link is invalid or expired!</p>
-                        <hr>
-                        <p class="mb-0">
-                            <strong>Reference:</strong>
-                            <span class="badge bg-dark fs-6 ms-2">{{reference}}</span>
-                        </p>
-                    </div>
-                    
-                </div>
-            </div>
-        {% elif doc.status in ["Completed", "Processed"]  or doc.order_status in ["Completed", "Closed'", "Paid"]%}
-            <div class="container mt-5" style="max-width: 600px;">
-                <div class="alert alert-success shadow-lg border-0 rounded-3 d-flex align-items-center p-4" role="alert">
-                    <div class="me-3">
-                        <i class="bi bi-check-circle-fill" style="font-size: 2rem;"></i>
-                    </div>
-                    <div>
-                        <h5 class="alert-heading mb-1 fw-bold">Payment Completed/Processed</h5>
-                        <p class="mb-0">Your payment has been successfully processed. Thank you for your purchase!</p>
-                        <hr>
-                        <p class="mb-0">
-                            <strong>Reference:</strong>
-                            <span class="badge bg-dark fs-6 ms-2">{{reference}}</span>
-                        </p>
-                    </div>
-                    
-                </div>
-            </div>
-        {% elif doc.status == "Failed" %}
-            <div class="container mt-5" style="max-width: 600px;">
-                <div class="alert alert-warning shadow-lg border-0 rounded-3 d-flex align-items-center p-4" role="alert">
-                    <div class="me-3">
-                        <i class="bi bi-check-circle-fill" style="font-size: 2rem;"></i>
-                    </div>
-                    <div>
-                        <h5 class="alert-heading mb-1 fw-bold">Payment Failed</h5>
-                        <p class="mb-0">Your payment Failed!</p>
-                        <hr>
-                        <p class="mb-0">
-                            <strong>Reference:</strong>
-                            <span class="badge bg-dark fs-6 ms-2">{{reference}}</span>
-                        </p>
-                    </div>
-                </div>
-            </div>
-        {% else %}
-            <div class="container">
-                
-                <div class="container mt-4" style="max-width: 500px;">
-                <div class="card shadow-lg border-0 rounded-3">
-                    <div class="card-body">
-                    <h5 class="card-title fw-bold mb-3">
-                        <i class="bi bi-receipt-cutoff me-2"></i> Summary
-                    </h5>
-                    <ul class="list-group list-group-flush">
-                        <li class="list-group-item d-flex justify-content-between align-items-center">
-                            <span class="fw-semibold">Payment Reference</span>
-                            <span class="badge rounded-pill">{{ reference }}</span>
-                        </li>
-                        <li class="list-group-item d-flex justify-content-between align-items-center">
-                            <span class="fw-semibold">Invoice/Order No.</span>
-                            <span class="badge rounded-pill">{{doc.order_no}}</span>
-                        </li>
-                        <li class="list-group-item d-flex justify-content-between align-items-center">
-                            <span class="fw-semibold">Order Amount</span>
-                            <span class="badge bg-success rounded-pill">{{doc.order_currency}} {{doc.grand_total}}</span>
-                        </li>
-                        <li class="list-group-item d-flex justify-content-between align-items-center">
-                            <span class="fw-semibold">Payment Amount</span>
-                            <span class="badge rounded-pill">{{doc.currency}} {{doc.payment_amount}}</span>
-                        </li>
-                    </ul>
-                    </div>
-                </div>
-                </div>
-
-                <hr>
-                <div class="row">
-                    <div class="col-12 d-flex justify-content-center">
-                        <button class="btn  btn-success" id="paymentBTN"  @click="getData">Pay</button>
-                    </div>
-                </div>
-
-            </div>
-        {% endif %}
-    {% else %}
-    <div class="container mt-5" style="max-width: 600px;">
-        <div class="alert alert-danger shadow-lg border-0 rounded-3 d-flex align-items-center p-4" role="alert">
+<div id="app" class="paystack-checkout">
+    <!-- No / unrecognized payment reference -->
+    <div v-if="pageState === 'no-reference'" class="container pc-page" style="max-width: 600px;">
+        <div class="alert alert-danger shadow-sm border-0 rounded-4 d-flex align-items-center p-4" role="alert">
             <div class="me-3">
-            <i class="bi bi-x-circle-fill" style="font-size: 2rem;"></i>
+                <i class="bi bi-x-circle-fill" style="font-size: 2rem;"></i>
             </div>
             <div>
-            <h5 class="alert-heading mb-1 fw-bold">Invalid Payment Reference</h5>
-            <p class="mb-0">The payment reference could not be verified. Please check it and try again.</p>
-            <hr>
-            <p class="mb-0">
-                <strong>Reference:</strong>
-                <span class="badge bg-dark fs-6 ms-2">{{reference}}</span>
-            </p>
+                <h5 class="alert-heading mb-1 fw-bold">Invalid Payment Reference</h5>
+                <p class="mb-0">The payment reference could not be verified. Please check it and try again.</p>
+                <template v-if="reference">
+                    <hr>
+                    <p class="mb-0">
+                        <strong>Reference:</strong>
+                        <span class="badge bg-dark fs-6 ms-2">[[ reference ]]</span>
+                    </p>
+                </template>
             </div>
         </div>
     </div>
 
-    {% endif %}
+    <!-- Gateway not configured -->
+    <div v-else-if="pageState === 'gateway-inactive'" class="container pc-page" style="max-width: 600px;">
+        <div class="alert alert-warning shadow-sm border-0 rounded-4 d-flex align-items-center p-4" role="alert">
+            <div class="me-3">
+                <i class="bi bi-exclamation-triangle-fill" style="font-size: 2rem;"></i>
+            </div>
+            <div>
+                <h5 class="alert-heading mb-1 fw-bold">Payment Gateway Not Active</h5>
+                <p class="mb-0">This vendor's payment gateway isn't configured yet. Please contact them directly.</p>
+                <hr>
+                <p class="mb-0">
+                    <strong>Reference:</strong>
+                    <span class="badge bg-dark fs-6 ms-2">[[ reference ]]</span>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Link invalid/expired: payment not settled but the underlying order already is -->
+    <div v-else-if="pageState === 'invalid-expired'" class="container pc-page" style="max-width: 600px;">
+        <div class="alert alert-warning shadow-sm border-0 rounded-4 d-flex align-items-center p-4" role="alert">
+            <div class="me-3">
+                <i class="bi bi-exclamation-triangle-fill" style="font-size: 2rem;"></i>
+            </div>
+            <div>
+                <h5 class="alert-heading mb-1 fw-bold">Payment Link Invalid</h5>
+                <p class="mb-0">This payment link is invalid or has expired.</p>
+                <hr>
+                <p class="mb-0">
+                    <strong>Reference:</strong>
+                    <span class="badge bg-dark fs-6 ms-2">[[ reference ]]</span>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Already paid -->
+    <div v-else-if="pageState === 'completed'" class="container pc-page" style="max-width: 600px;">
+        <div class="alert alert-success shadow-sm border-0 rounded-4 d-flex align-items-center p-4" role="alert">
+            <div class="me-3">
+                <i class="bi bi-check-circle-fill" style="font-size: 2rem;"></i>
+            </div>
+            <div>
+                <h5 class="alert-heading mb-1 fw-bold">Payment Completed</h5>
+                <p class="mb-0">Your payment has been successfully processed. Thank you for your purchase!</p>
+                <hr>
+                <p class="mb-0">
+                    <strong>Reference:</strong>
+                    <span class="badge bg-dark fs-6 ms-2">[[ reference ]]</span>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Failed -->
+    <div v-else-if="pageState === 'failed'" class="container pc-page" style="max-width: 600px;">
+        <div class="alert alert-danger shadow-sm border-0 rounded-4 d-flex align-items-center p-4" role="alert">
+            <div class="me-3">
+                <i class="bi bi-x-octagon-fill" style="font-size: 2rem;"></i>
+            </div>
+            <div>
+                <h5 class="alert-heading mb-1 fw-bold">Payment Failed</h5>
+                <p class="mb-0">Your payment could not be completed.</p>
+                <hr>
+                <p class="mb-0">
+                    <strong>Reference:</strong>
+                    <span class="badge bg-dark fs-6 ms-2">[[ reference ]]</span>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary + Pay -->
+    <div v-else-if="pageState === 'summary'" class="container pc-page">
+        <div class="pc-card card border-0 rounded-4">
+            <div class="card-body p-0">
+                <div class="pc-card-header">
+                    <i class="bi bi-receipt-cutoff"></i>
+                    <span>Payment Summary</span>
+                </div>
+                <!-- Everything the payment depends on, ending with the
+                     submit button as the form's last element - @submit
+                     covers both a click and pressing Enter. -->
+                <form class="pc-form" @submit.prevent="getData">
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item pc-row">
+                            <span class="pc-label">Payment Reference</span>
+                            <span class="badge pc-badge">[[ reference ]]</span>
+                        </li>
+                        <li class="list-group-item pc-row">
+                            <span class="pc-label">Invoice / Order No.</span>
+                            <span class="badge pc-badge">[[ doc.order_no ]]</span>
+                        </li>
+                        <li class="list-group-item pc-row">
+                            <span class="pc-label">Order Amount</span>
+                            <span class="badge pc-badge pc-badge-muted">[[ formatCurrency(doc.grand_total, doc.order_currency) ]]</span>
+                        </li>
+                        <li class="list-group-item pc-row pc-row-total">
+                            <span class="pc-label">Amount Due</span>
+                            <span class="badge pc-badge pc-badge-total">[[ formatCurrency(doc.payment_amount, doc.currency) ]]</span>
+                        </li>
+                    </ul>
+                    <div class="pc-card-footer">
+                        <button type="submit" class="btn btn-success pc-pay-btn" id="paymentBTN" :disabled="paying">
+                            <span v-if="paying" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                            <i v-else class="bi bi-lock-fill me-2"></i>
+                            [[ paying ? 'Processing…' : 'Pay Now' ]]
+                        </button>
+                        <p class="pc-secure-note">
+                            <i class="bi bi-shield-lock"></i> Secured by Paystack
+                        </p>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
 </div>
+
+<style>
+    /* Centers whichever state div is showing (alert or summary card) both
+       horizontally and vertically in the page, instead of just sitting
+       under the top nav with mt-5. 70vh keeps it comfortably centered
+       without fighting the site header/footer height. */
+    .paystack-checkout .pc-page {
+        min-height: 70vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem 1rem;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    .paystack-checkout .pc-page > .alert {
+        width: 100%;
+    }
+
+    .paystack-checkout .pc-card {
+        width: 100%;
+        max-width: 480px;
+        box-shadow: 0 4px 24px rgba(15, 23, 42, 0.08);
+        border: 1px solid rgba(15, 23, 42, 0.06);
+    }
+
+    .paystack-checkout .pc-card-header {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 1.25rem 1.5rem;
+        font-weight: 600;
+        font-size: 1.05rem;
+        border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+        color: #1f2937;
+    }
+
+    .paystack-checkout .pc-card-header i {
+        font-size: 1.15rem;
+        color: #16a34a;
+    }
+
+    .paystack-checkout .pc-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem 1rem;
+        padding: 0.9rem 1.5rem;
+        border-color: rgba(15, 23, 42, 0.06);
+    }
+
+    .paystack-checkout .pc-row-total {
+        background-color: rgba(22, 163, 74, 0.05);
+    }
+
+    .paystack-checkout .pc-label {
+        color: #6b7280;
+        font-weight: 500;
+        font-size: 0.9rem;
+    }
+
+    .paystack-checkout .pc-row-total .pc-label {
+        color: #1f2937;
+        font-weight: 600;
+    }
+
+    .paystack-checkout .pc-badge {
+        background-color: #f3f4f6;
+        color: #1f2937;
+        font-weight: 600;
+        font-size: 0.85rem;
+        padding: 0.4rem 0.75rem;
+        border-radius: 999px;
+        word-break: break-word;
+        text-align: right;
+    }
+
+    .paystack-checkout .pc-badge-muted {
+        background-color: #f3f4f6;
+        color: #4b5563;
+    }
+
+    .paystack-checkout .pc-badge-total {
+        background-color: #16a34a;
+        color: #ffffff;
+        font-size: 0.95rem;
+    }
+
+    .paystack-checkout .pc-card-footer {
+        padding: 1.5rem;
+    }
+
+    .paystack-checkout .pc-pay-btn {
+        width: 100%;
+        padding: 0.75rem 1rem;
+        font-weight: 600;
+        font-size: 1rem;
+        border-radius: 0.65rem;
+        background-color: #16a34a;
+        border-color: #16a34a;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+    }
+
+    .paystack-checkout .pc-pay-btn:hover:not(:disabled) {
+        background-color: #15803d;
+        border-color: #15803d;
+    }
+
+    .paystack-checkout .pc-pay-btn:disabled {
+        opacity: 0.75;
+    }
+
+    .paystack-checkout .pc-secure-note {
+        margin-top: 0.85rem;
+        margin-bottom: 0;
+        font-size: 0.8rem;
+        color: #9ca3af;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.35rem;
+    }
+</style>
 {% endblock %}
 
 {% block script %}
@@ -143,8 +277,8 @@
 <script src="/assets/frappe_paystack/js/sweetalert2@11.js"></script>
 <script src="https://js.paystack.co/v1/inline.js"></script>
 <script>
-  window.doc = {{ doc | safe }};
-  window.reference = "{{ reference }}";
+  window.doc = {{ doc_json | safe }};
+  window.reference = {{ reference_json | safe }};
 </script>
 <script src="/assets/frappe_paystack/js/paystack-checkout/index.js"></script>
 {% endblock %}
