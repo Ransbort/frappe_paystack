@@ -23,6 +23,17 @@ class PaystackPaymentLog(Document):
             return ""
         elif frappe.db.exists(self.linked_doctype, {"name":self.linked_docname}):
             doc = frappe.get_doc(self.linked_doctype, self.linked_docname)
+            # docstatus is meaningless for a non-submittable doctype (it
+            # stays permanently 0, since there's no submit/cancel workflow
+            # to move it to 1/2) - e.g. gym_management's Gym Membership,
+            # which tracks its own payment state via `status`/
+            # `payment_status` instead. Without this check, every payment
+            # log for a doctype like that would fail validate_record() and
+            # be rejected on insert, even for a perfectly normal, unpaid
+            # document. Submittable doctypes (Sales Invoice, Sales Order)
+            # keep the original docstatus-based checks below unchanged.
+            if not frappe.get_meta(self.linked_doctype).is_submittable:
+                return ""
             if doc.docstatus == 1 and not doc.status in [
                 "Partly Paid", "Unpaid", "Overdue", "To Deliver and Bill", "To Bill",
                 "To Deliver"]:
@@ -90,6 +101,17 @@ class PaystackPaymentLog(Document):
             pe = frappe.new_doc("Payment Entry")
             pe.payment_type = "Receive"
             pe.company = inv.company
+            # Frappe requires a Cost Center on any entry touching a P&L
+            # account and normally falls back to the Company's own default
+            # when one isn't set explicitly - but that fallback only works
+            # if that default is actually configured. When it isn't, the
+            # submit() below throws ("Cost Center is required for ...")
+            # deep inside a background/webhook-driven flow, so the customer
+            # sees a successful Paystack charge while the Payment Entry
+            # silently fails to submit and the invoice stays unpaid on our
+            # side. Setting it explicitly here removes that single point of
+            # failure regardless of whether the Company default is set.
+            pe.cost_center = frappe.db.get_value("Company", inv.company, "cost_center")
             pe.posting_date = frappe.utils.getdate()
             pe.mode_of_payment = GATE_WAY_SETTINGS.get("mode_of_payment")
             pe.party_type = "Customer"

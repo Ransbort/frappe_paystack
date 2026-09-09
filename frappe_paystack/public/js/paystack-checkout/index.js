@@ -69,7 +69,18 @@ createApp({
             trxref: response.reference,
           }).then(res => {
             const status = res.message && res.message.status;
-            if (status === 'Processed') {
+            // Matches pageState()'s own paymentSettled check above ('Completed'
+            // is a real success too, not just 'Processed') - verify_transaction()
+            // sets the Paystack Payment Log to "Processed" and save()s it, but
+            // for a Sales Invoice that gets fully settled, the log's own
+            // on_update() runs inside that same save() and immediately bumps
+            // status again, straight through to "Completed" (see
+            // paystack_payment_log.py), before save() returns here. So the
+            // normal, fully-paid-in-one-shot case comes back as "Completed",
+            // not "Processed" - checking only 'Processed' treated every real
+            // success as a failure and flashed "Payment Failed" right after a
+            // successful charge.
+            if (status === 'Processed' || status === 'Completed') {
               Swal.fire(
                 'Successful',
                 'Your payment was successful, we will issue you receipt shortly.',
